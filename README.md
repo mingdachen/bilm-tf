@@ -1,3 +1,27 @@
+# EntELMo
+
+The code base was constructed based on the original ELMo implementation and was used to pretrain models described in
+[EntEval: A Holistic Evaluation Benchmark for Entity Representations](https://arxiv.org/abs/1909.00137) (EMNLP 2019).
+
+To pretrain models, please use ```bin/train_elmo_wikilink.py```. Note that this implementation requires installing TensorFlow in your environment.
+
+
+Evaluation scripts/data and pretrained models/data are available at [this repository](https://github.com/ZeweiChu/EntEval)
+
+## Reference
+
+```
+@inproceedings{mchen-enteval-19,
+  author    = {Mingda Chen and Zewei Chu and Yang Chen and Karl Stratos and Kevin Gimpel},
+  title     = {EntEval: A Holistic Evaluation Benchmark for Entity Representations},
+  booktitle = {Proc. of {EMNLP}},
+  year      = {2019}
+}
+```
+
+
+# Following is the original README
+
 # bilm-tf
 Tensorflow implementation of the pretrained biLM used to compute ELMo
 representations from ["Deep contextualized word representations"](http://arxiv.org/abs/1802.05365).

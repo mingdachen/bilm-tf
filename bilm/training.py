@@ -23,9 +23,28 @@ tf.logging.set_verbosity(tf.logging.INFO)
 
 def print_variable_summary():
     import pprint
-    variables = sorted([[v.name, v.get_shape()] for v in tf.global_variables()])
+    variables = sorted(
+        [[v.name, v.get_shape()] for v in tf.global_variables()])
     pprint.pprint(variables)
 
+
+def tf_repeat(tensor, repeats):
+    """
+    Args:
+
+    input: A Tensor. 1-D or higher.
+    repeats: A list. Number of repeat for each dimension, length must be the same as the number of dimensions in input
+
+    Returns:
+    
+    A Tensor. Has the same type as input. Has the shape of tensor.shape * repeats
+    """
+    with tf.variable_scope("repeat"):
+        expanded_tensor = tf.expand_dims(tensor, -1)
+        multiples = [1] + repeats
+        tiled_tensor = tf.tile(expanded_tensor, multiples=multiples)
+        repeated_tesnor = tf.reshape(tiled_tensor, tf.shape(tensor) * repeats)
+    return repeated_tesnor
 
 class LanguageModel(object):
     '''
@@ -80,22 +99,24 @@ class LanguageModel(object):
         projection_dim = self.options['lstm']['projection_dim']
 
         # the input token_ids and word embeddings
-        self.token_ids = tf.placeholder(DTYPE_INT,
-                               shape=(batch_size, unroll_steps),
-                               name='token_ids')
+        self.token_ids = tf.placeholder(
+            DTYPE_INT,
+            shape=(batch_size, unroll_steps),
+            name='token_ids')
         # the word embeddings
         with tf.device("/cpu:0"):
             self.embedding_weights = tf.get_variable(
                 "embedding", [n_tokens_vocab, projection_dim],
                 dtype=DTYPE,
             )
-            self.embedding = tf.nn.embedding_lookup(self.embedding_weights,
-                                                self.token_ids)
+            self.embedding = tf.nn.embedding_lookup(
+                self.embedding_weights, self.token_ids)
 
         # if a bidirectional LM then make placeholders for reverse
         # model and embeddings
         if self.bidirectional:
-            self.token_ids_reverse = tf.placeholder(DTYPE_INT,
+            self.token_ids_reverse = \
+                tf.placeholder(DTYPE_INT,
                                shape=(batch_size, unroll_steps),
                                name='token_ids_reverse')
             with tf.device("/cpu:0"):
@@ -133,44 +154,45 @@ class LanguageModel(object):
         batch_size = self.options['batch_size']
         unroll_steps = self.options['unroll_steps']
         projection_dim = self.options['lstm']['projection_dim']
-    
+
         cnn_options = self.options['char_cnn']
         filters = cnn_options['filters']
         n_filters = sum(f[1] for f in filters)
         max_chars = cnn_options['max_characters_per_token']
         char_embed_dim = cnn_options['embedding']['dim']
         n_chars = cnn_options['n_characters']
-        if n_chars != 261:
+        if n_chars != 262:
             raise InvalidNumberOfCharacters(
-                    "Set n_characters=261 for training see the README.md"
+                "Set n_characters=262 for training see the README.md"
             )
         if cnn_options['activation'] == 'tanh':
             activation = tf.nn.tanh
         elif cnn_options['activation'] == 'relu':
             activation = tf.nn.relu
 
-        # the input character ids 
-        self.tokens_characters = tf.placeholder(DTYPE_INT,
-                                   shape=(batch_size, unroll_steps, max_chars),
-                                   name='tokens_characters')
+        # the input character ids
+        self.tokens_characters = \
+            tf.placeholder(DTYPE_INT,
+                           shape=(batch_size, unroll_steps, max_chars),
+                           name='tokens_characters')
         # the character embeddings
         with tf.device("/cpu:0"):
             self.embedding_weights = tf.get_variable(
-                    "char_embed", [n_chars, char_embed_dim],
-                    dtype=DTYPE,
-                    initializer=tf.random_uniform_initializer(-1.0, 1.0)
+                "char_embed", [n_chars, char_embed_dim],
+                dtype=DTYPE,
+                initializer=tf.random_uniform_initializer(-1.0, 1.0)
             )
             # shape (batch_size, unroll_steps, max_chars, embed_dim)
-            self.char_embedding = tf.nn.embedding_lookup(self.embedding_weights,
-                                                    self.tokens_characters)
+            self.char_embedding = tf.nn.embedding_lookup(
+                self.embedding_weights, self.tokens_characters)
 
             if self.bidirectional:
-                self.tokens_characters_reverse = tf.placeholder(DTYPE_INT,
+                self.tokens_characters_reverse = \
+                    tf.placeholder(DTYPE_INT,
                                    shape=(batch_size, unroll_steps, max_chars),
                                    name='tokens_characters_reverse')
                 self.char_embedding_reverse = tf.nn.embedding_lookup(
                     self.embedding_weights, self.tokens_characters_reverse)
-
 
         # the convolutions
         def make_convolutions(inp, reuse):
@@ -204,13 +226,13 @@ class LanguageModel(object):
                         initializer=tf.constant_initializer(0.0))
 
                     conv = tf.nn.conv2d(
-                            inp, w,
-                            strides=[1, 1, 1, 1],
-                            padding="VALID") + b
+                        inp, w,
+                        strides=[1, 1, 1, 1],
+                        padding="VALID") + b
                     # now max pool
                     conv = tf.nn.max_pool(
-                            conv, [1, 1, max_chars-width+1, 1],
-                            [1, 1, 1, 1], 'VALID')
+                        conv, [1, 1, max_chars-width+1, 1],
+                        [1, 1, 1, 1], 'VALID')
 
                     # activation
                     conv = activation(conv)
@@ -240,8 +262,9 @@ class LanguageModel(object):
         if use_highway or use_proj:
             embedding = tf.reshape(embedding, [-1, n_filters])
             if self.bidirectional:
-                embedding_reverse = tf.reshape(embedding_reverse,
-                    [-1, n_filters])
+                embedding_reverse = \
+                    tf.reshape(embedding_reverse,
+                               [-1, n_filters])
 
         # set up weights for projection
         if use_proj:
@@ -295,8 +318,8 @@ class LanguageModel(object):
                                              W_carry, b_carry,
                                              W_transform, b_transform)
                 self.token_embedding_layers.append(
-                    tf.reshape(embedding, 
-                        [batch_size, unroll_steps, highway_dim])
+                    tf.reshape(
+                        embedding, [batch_size, unroll_steps, highway_dim])
                 )
 
         # finally project down to projection dim if needed
@@ -306,8 +329,8 @@ class LanguageModel(object):
                 embedding_reverse = tf.matmul(embedding_reverse, W_proj_cnn) \
                     + b_proj_cnn
             self.token_embedding_layers.append(
-                tf.reshape(embedding,
-                        [batch_size, unroll_steps, projection_dim])
+                tf.reshape(
+                    embedding, [batch_size, unroll_steps, projection_dim])
             )
 
         # reshape back to (batch_size, tokens, dim)
@@ -346,9 +369,19 @@ class LanguageModel(object):
         self.init_lstm_state = []
         self.final_lstm_state = []
 
+        self.fw_src_mask = tf.placeholder(
+            DTYPE_INT,
+            shape=(batch_size, unroll_steps),
+            name="fw_src_mask")
+        self.bk_src_mask = tf.placeholder(
+            DTYPE_INT,
+            shape=(batch_size, unroll_steps),
+            name='bk_src_mask')
+
         # get the LSTM inputs
         if self.bidirectional:
             lstm_inputs = [self.embedding, self.embedding_reverse]
+            lstm_masks = [self.fw_src_mask, self.bk_src_mask]
         else:
             lstm_inputs = [self.embedding]
 
@@ -356,13 +389,14 @@ class LanguageModel(object):
         cell_clip = self.options['lstm'].get('cell_clip')
         proj_clip = self.options['lstm'].get('proj_clip')
 
-        use_skip_connections = self.options['lstm'].get(
-                                            'use_skip_connections')
+        use_skip_connections = \
+            self.options['lstm'].get('use_skip_connections')
         if use_skip_connections:
             print("USING SKIP CONNECTIONS")
 
         lstm_outputs = []
-        for lstm_num, lstm_input in enumerate(lstm_inputs):
+        for lstm_num, (lstm_input, lstm_mask) in \
+                enumerate(zip(lstm_inputs, lstm_masks)):
             lstm_cells = []
             for i in range(n_lstm_layers):
                 if projection_dim < lstm_dim:
@@ -387,7 +421,8 @@ class LanguageModel(object):
 
                 # add dropout
                 if self.is_training:
-                    lstm_cell = tf.nn.rnn_cell.DropoutWrapper(lstm_cell,
+                    lstm_cell = tf.nn.rnn_cell.DropoutWrapper(
+                        lstm_cell,
                         input_keep_prob=keep_prob)
 
                 lstm_cells.append(lstm_cell)
@@ -412,6 +447,7 @@ class LanguageModel(object):
                     _lstm_output_unpacked, final_state = tf.nn.static_rnn(
                         lstm_cell,
                         tf.unstack(lstm_input, axis=1),
+                        sequence_length=tf.reduce_sum(lstm_mask, 1),
                         initial_state=self.init_lstm_state[-1])
                 self.final_lstm_state.append(final_state)
 
@@ -420,10 +456,10 @@ class LanguageModel(object):
                 tf.stack(_lstm_output_unpacked, axis=1), [-1, projection_dim])
             if self.is_training:
                 # add dropout to output
-                lstm_output_flat = tf.nn.dropout(lstm_output_flat,
-                    keep_prob)
-            tf.add_to_collection('lstm_output_embeddings',
-                _lstm_output_unpacked)
+                lstm_output_flat = \
+                    tf.nn.dropout(lstm_output_flat, keep_prob)
+            tf.add_to_collection(
+                'lstm_output_embeddings', _lstm_output_unpacked)
 
             lstm_outputs.append(lstm_output_flat)
 
@@ -445,16 +481,22 @@ class LanguageModel(object):
         # DEFINE next_token_id and *_reverse placeholders for the gold input
         def _get_next_token_placeholders(suffix):
             name = 'next_token_id' + suffix
-            id_placeholder = tf.placeholder(DTYPE_INT,
-                                   shape=(batch_size, unroll_steps),
-                                   name=name)
-            return id_placeholder
+            id_placeholder = tf.placeholder(
+                DTYPE_INT,
+                shape=(batch_size, unroll_steps),
+                name=name)
+            name = 'next_token_mask' + suffix
+            mask_placeholder = tf.placeholder(
+                DTYPE_INT,
+                shape=(batch_size, unroll_steps),
+                name=name)
+            return id_placeholder, mask_placeholder
 
         # get the window and weight placeholders
-        self.next_token_id = _get_next_token_placeholders('')
+        self.next_token_id, self.fw_tgt_mask = _get_next_token_placeholders('')
         if self.bidirectional:
-            self.next_token_id_reverse = _get_next_token_placeholders(
-                '_reverse')
+            self.next_token_id_reverse, self.bk_tgt_mask = \
+                _get_next_token_placeholders('_reverse')
 
         # DEFINE THE SOFTMAX VARIABLES
         # get the dimension of the softmax weights
@@ -468,7 +510,8 @@ class LanguageModel(object):
 
         with tf.variable_scope('softmax'), tf.device('/cpu:0'):
             # Glorit init (std=(1.0 / sqrt(fan_in))
-            softmax_init = tf.random_normal_initializer(0.0,
+            softmax_init = tf.random_normal_initializer(
+                0.0,
                 1.0 / np.sqrt(softmax_dim))
             if not self.share_embedding_softmax:
                 self.softmax_W = tf.get_variable(
@@ -487,23 +530,26 @@ class LanguageModel(object):
 
         if self.bidirectional:
             next_ids = [self.next_token_id, self.next_token_id_reverse]
+            next_masks = [self.fw_tgt_mask, self.bk_tgt_mask]
         else:
             next_ids = [self.next_token_id]
 
-        for id_placeholder, lstm_output_flat in zip(next_ids, lstm_outputs):
+        for id_mask, id_placeholder, lstm_output_flat in \
+                zip(next_masks, next_ids, lstm_outputs):
             # flatten the LSTM output and next token id gold to shape:
             # (batch_size * unroll_steps, softmax_dim)
             # Flatten and reshape the token_id placeholders
             next_token_id_flat = tf.reshape(id_placeholder, [-1, 1])
+            next_token_mask_flat = tf.to_float(tf.reshape(id_mask, [-1]))
 
             with tf.control_dependencies([lstm_output_flat]):
                 if self.is_training and self.sample_softmax:
                     losses = tf.nn.sampled_softmax_loss(
-                                   self.softmax_W, self.softmax_b,
-                                   next_token_id_flat, lstm_output_flat,
-                                   self.options['n_negative_samples_batch'],
-                                   self.options['n_tokens_vocab'],
-                                   num_true=1)
+                        self.softmax_W, self.softmax_b,
+                        next_token_id_flat, lstm_output_flat,
+                        self.options['n_negative_samples_batch'],
+                        self.options['n_tokens_vocab'],
+                        num_true=1)
 
                 else:
                     # get the full softmax loss
@@ -519,14 +565,122 @@ class LanguageModel(object):
                         labels=tf.squeeze(next_token_id_flat, squeeze_dims=[1])
                     )
 
-            self.individual_losses.append(tf.reduce_mean(losses))
+            self.individual_losses.append(
+                tf.reduce_sum(losses * next_token_mask_flat) /
+                tf.reduce_sum(next_token_mask_flat))
 
         # now make the total loss -- it's the mean of the individual losses
         if self.bidirectional:
             self.total_loss = 0.5 * (self.individual_losses[0]
-                                    + self.individual_losses[1])
+                                     + self.individual_losses[1])
         else:
             self.total_loss = self.individual_losses[0]
+
+        assert len(lstm_outputs) == 2
+
+        proj_dim = self.options['lstm']['projection_dim']
+        bow_size = self.options['bow_size']
+
+        fw_lstm_output = tf.reshape(
+            lstm_outputs[0], [batch_size, unroll_steps, proj_dim])
+        bk_lstm_output = tf.reshape(
+            lstm_outputs[1], [batch_size, unroll_steps, proj_dim])
+
+        # DEFINE next_token_id and *_reverse placeholders for the gold input
+        def _get_bow_placeholders(suffix):
+            name = 'bow_id_' + suffix
+            id_placeholder = tf.placeholder(
+                DTYPE_INT,
+                shape=(batch_size, bow_size),
+                name=name)
+            name = 'bow_mask_' + suffix
+            mask_placeholder = tf.placeholder(
+                DTYPE_INT,
+                shape=(batch_size, bow_size),
+                name=name)
+            return id_placeholder, mask_placeholder
+
+        with tf.variable_scope('desc2cont_linear_bow'):
+            self.cont_bow_ids, self.cont_bow_mask = \
+                _get_bow_placeholders('cont')
+            # Glorit init (std=(1.0 / sqrt(fan_in))
+            linear_init = tf.random_normal_initializer(
+                0.0,
+                1.0 / np.sqrt(softmax_dim))
+            linear_input = [tf.reduce_sum(fw_lstm_output * tf.expand_dims(tf.to_float(self.fw_src_mask), axis=2), 1) /
+                            tf.reduce_sum(tf.to_float(self.fw_src_mask), 1, keepdims=True),
+                            tf.reduce_sum(bk_lstm_output * tf.expand_dims(tf.to_float(self.bk_src_mask), axis=2), 1) /
+                            tf.reduce_sum(tf.to_float(self.bk_src_mask), 1, keepdims=True)]
+            desc_linear_input = tf.concat(linear_input, axis=1)
+            linear2cont = tf.layers.dense(
+                inputs=desc_linear_input,
+                units=proj_dim,
+                kernel_initializer=linear_init)
+            # (batch_size, 1, proj_dim)
+            cont_vec = tf.expand_dims(linear2cont, axis=1)
+            exp_cont_vec = tf_repeat(cont_vec, [1, bow_size, 1])
+            exp_cont_vec = tf.reshape(
+                exp_cont_vec, [batch_size * bow_size, proj_dim])
+
+            cont_losses = tf.nn.sampled_softmax_loss(
+                self.softmax_W, self.softmax_b,
+                tf.reshape(self.cont_bow_ids, [batch_size * bow_size, 1]),
+                exp_cont_vec,
+                self.options['n_negative_samples_batch'],
+                self.options['n_tokens_vocab'],
+                num_true=1)
+            cont_loss = tf.reduce_sum(
+                cont_losses * tf.to_float(
+                    tf.reshape(self.cont_bow_mask, [-1]))) / \
+                tf.reduce_sum(tf.to_float(self.cont_bow_mask))
+
+        self.desc_loss = self.total_loss + cont_loss
+
+        with tf.variable_scope('cont2desc_linear_bow'):
+            self.desc_bow_ids, self.desc_bow_mask = \
+                _get_bow_placeholders('desc')
+            self.entity_mask = tf.placeholder(
+                DTYPE_INT,
+                shape=(batch_size, unroll_steps + 1),
+                name="entity_mask")
+            linear_init = tf.random_normal_initializer(
+                0.0,
+                1.0 / np.sqrt(softmax_dim))
+            bk_lstm_output = tf.reverse_sequence(
+                bk_lstm_output, tf.reduce_sum(self.bk_src_mask, 1),
+                seq_axis=1,
+                batch_axis=0)
+            pad_vec = tf.zeros([batch_size, 1, proj_dim])
+            lstm_cont_output = tf.concat(
+                [tf.concat([fw_lstm_output, pad_vec], axis=1),
+                 tf.concat([pad_vec, bk_lstm_output], axis=1)], axis=2)
+            cont_linear_input = tf.reduce_sum(
+                lstm_cont_output *
+                tf.expand_dims(tf.to_float(self.entity_mask), axis=2), axis=1)
+            cont_linear_input = cont_linear_input / \
+                tf.reduce_sum(tf.to_float(self.entity_mask), axis=1, keepdims=True)
+            linear2desc = tf.layers.dense(
+                inputs=cont_linear_input,
+                units=proj_dim,
+                kernel_initializer=linear_init)
+
+            desc_vec = tf.expand_dims(linear2desc, axis=1)
+            exp_desc_vec = tf_repeat(desc_vec, [1, bow_size, 1])
+            exp_desc_vec = tf.reshape(
+                exp_desc_vec, [batch_size * bow_size, proj_dim])
+
+            desc_losses = tf.nn.sampled_softmax_loss(
+                self.softmax_W, self.softmax_b,
+                tf.reshape(self.desc_bow_ids, [batch_size * bow_size, 1]),
+                exp_desc_vec,
+                self.options['n_negative_samples_batch'],
+                self.options['n_tokens_vocab'],
+                num_true=1)
+            desc_loss = tf.reduce_sum(
+                desc_losses * tf.to_float(tf.reshape(self.desc_bow_mask, [-1]))) / \
+                tf.reduce_sum(tf.to_float(self.desc_bow_mask))
+
+        self.cont_loss = self.total_loss + desc_loss
 
 
 def average_gradients(tower_grads, batch_size, options):
@@ -566,7 +720,7 @@ def average_gradients(tower_grads, batch_size, options):
             for g, v in grad_and_vars:
                 # Add 0 dimension to the gradients to represent the tower.
                 expanded_g = tf.expand_dims(g, 0)
-                # Append on a 'tower' dimension which we will average over 
+                # Append on a 'tower' dimension which we will average over
                 grads.append(expanded_g)
 
             # Average over the 'tower' dimension.
@@ -582,7 +736,7 @@ def average_gradients(tower_grads, batch_size, options):
         average_grads.append(grad_and_var)
 
     assert len(average_grads) == len(list(zip(*tower_grads)))
-    
+
     return average_grads
 
 
@@ -620,9 +774,12 @@ def summary_gradient_updates(grads, opt, lr):
         values_norm = tf.sqrt(tf.reduce_sum(v * v)) + 1.0e-7
         updates_norm = tf.sqrt(tf.reduce_sum(updates * updates))
         ret.append(
-                tf.summary.scalar('UPDATE/' + vname.replace(":", "_"), updates_norm / values_norm))
+            tf.summary.scalar(
+                'UPDATE/' + vname.replace(":", "_"),
+                updates_norm / values_norm))
 
     return ret
+
 
 def _deduplicate_indexed_slices(values, indices):
     """Sums `values` associated with any non-unique `indices`.
@@ -637,8 +794,8 @@ def _deduplicate_indexed_slices(values, indices):
     """
     unique_indices, new_index_positions = tf.unique(indices)
     summed_values = tf.unsorted_segment_sum(
-      values, new_index_positions,
-      tf.shape(unique_indices)[0])
+        values, new_index_positions,
+        tf.shape(unique_indices)[0])
     return (summed_values, unique_indices)
 
 
@@ -672,12 +829,52 @@ def _get_feed_dict_from_X(X, start, end, model, char_inputs, bidirectional):
     return feed_dict
 
 
+def _get_feed_dict_from_X2(X, start, end, model, field):
+    feed_dict = {}
+    char_ids = X['fw_{}_char_ids'.format(field)][start:end]
+    feed_dict[model.tokens_characters] = char_ids
+
+    feed_dict[model.tokens_characters_reverse] = \
+        X['bk_{}_char_ids'.format(field)][start:end]
+
+    feed_dict[model.fw_src_mask] = \
+        X['fw_{}_token_mask'.format(field)][start:end]
+    feed_dict[model.bk_src_mask] = \
+        X['bk_{}_token_mask'.format(field)][start:end]
+
+    # now the targets with weights
+    feed_dict[model.next_token_id] = \
+        X['fw_{}_target_ids'.format(field)][start:end]
+    feed_dict[model.next_token_id_reverse] = \
+        X['bk_{}_target_ids'.format(field)][start:end]
+
+    feed_dict[model.fw_tgt_mask] = \
+        X['fw_{}_target_mask'.format(field)][start:end]
+    feed_dict[model.bk_tgt_mask] = \
+        X['bk_{}_target_mask'.format(field)][start:end]
+
+    if field == "cont":
+        feed_dict[model.entity_mask] = \
+            X['entity_mask'][start:end]
+        feed_dict[model.desc_bow_ids] = \
+            X['desc_bow_ids'][start:end]
+        feed_dict[model.desc_bow_mask] = \
+            X['desc_bow_mask'][start:end]
+    else:
+        feed_dict[model.cont_bow_ids] = \
+            X['cont_bow_ids'][start:end]
+        feed_dict[model.cont_bow_mask] = \
+            X['cont_bow_mask'][start:end]
+
+    return feed_dict
+
+
 def train(options, data, n_gpus, tf_save_dir, tf_log_dir,
           restart_ckpt_file=None):
 
     # not restarting so save the options
     if restart_ckpt_file is None:
-        with open(os.path.join(tf_save_dir, 'options.json'), 'w') as fout:
+        with open(os.path.join(tf_save_dir, 'options.json'), 'w+') as fout:
             fout.write(json.dumps(options))
 
     with tf.device('/cpu:0'):
@@ -691,77 +888,98 @@ def train(options, data, n_gpus, tf_save_dir, tf_log_dir,
                                         initial_accumulator_value=1.0)
 
         # calculate the gradients on each GPU
-        tower_grads = []
+        desc_tower_grads = []
+        cont_tower_grads = []
         models = []
         train_perplexity = tf.get_variable(
             'train_perplexity', [],
             initializer=tf.constant_initializer(0.0), trainable=False)
-        norm_summaries = []
+        # norm_summaries = []
         for k in range(n_gpus):
             with tf.device('/gpu:%d' % k):
                 with tf.variable_scope('lm', reuse=k > 0):
                     # calculate the loss for one model replica and get
                     #   lstm states
                     model = LanguageModel(options, True)
-                    loss = model.total_loss
+                    desc_loss = model.desc_loss
+                    cont_loss = model.cont_loss
                     models.append(model)
                     # get gradients
-                    grads = opt.compute_gradients(
-                        loss * options['unroll_steps'],
+                    desc_grads = opt.compute_gradients(
+                        desc_loss * options['unroll_steps'],
                         aggregation_method=tf.AggregationMethod.EXPERIMENTAL_TREE,
                     )
-                    tower_grads.append(grads)
+                    cont_grads = opt.compute_gradients(
+                        cont_loss * options['unroll_steps'],
+                        aggregation_method=tf.AggregationMethod.EXPERIMENTAL_TREE,
+                    )
+                    desc_tower_grads.append(desc_grads)
+                    cont_tower_grads.append(cont_grads)
                     # keep track of loss across all GPUs
-                    train_perplexity += loss
+                    train_perplexity += model.total_loss
 
         print_variable_summary()
 
         # calculate the mean of each gradient across all GPUs
-        grads = average_gradients(tower_grads, options['batch_size'], options)
-        grads, norm_summary_ops = clip_grads(grads, options, True, global_step)
-        norm_summaries.extend(norm_summary_ops)
+        desc_grads = average_gradients(
+            desc_tower_grads, options['batch_size'], options)
+        cont_grads = average_gradients(
+            cont_tower_grads, options['batch_size'], options)
+        desc_grads, desc_norm_summary_ops = \
+            clip_grads(desc_grads, options, True, global_step)
+        cont_grads, cont_norm_summary_ops = \
+            clip_grads(cont_grads, options, True, global_step)
+        # norm_summaries = \
+        #     {'desc': desc_norm_summary_ops, 'cont': cont_norm_summary_ops}
 
         # log the training perplexity
         train_perplexity = tf.exp(train_perplexity / n_gpus)
-        perplexity_summmary = tf.summary.scalar(
-            'train_perplexity', train_perplexity)
+        # perplexity_summmary = tf.summary.scalar(
+        #     'train_perplexity', train_perplexity)
 
         # some histogram summaries.  all models use the same parameters
         # so only need to summarize one
-        histogram_summaries = [
-            tf.summary.histogram('token_embedding', models[0].embedding)
-        ]
+        # histogram_summaries = [
+        #     tf.summary.histogram('token_embedding', models[0].embedding)
+        # ]
         # tensors of the output from the LSTM layer
-        lstm_out = tf.get_collection('lstm_output_embeddings')
-        histogram_summaries.append(
-                tf.summary.histogram('lstm_embedding_0', lstm_out[0]))
-        if options.get('bidirectional', False):
-            # also have the backward embedding
-            histogram_summaries.append(
-                tf.summary.histogram('lstm_embedding_1', lstm_out[1]))
+        # lstm_out = tf.get_collection('lstm_output_embeddings')
+        # histogram_summaries.append(
+        #     tf.summary.histogram('lstm_embedding_0', lstm_out[0]))
+        # if options.get('bidirectional', False):
+        #     # also have the backward embedding
+        #     histogram_summaries.append(
+        #         tf.summary.histogram('lstm_embedding_1', lstm_out[1]))
 
         # apply the gradients to create the training operation
-        train_op = opt.apply_gradients(grads, global_step=global_step)
+        train_op = {}
+        train_op['desc'] = opt.apply_gradients(
+            desc_grads, global_step=global_step)
+        train_op['cont'] = opt.apply_gradients(
+            cont_grads, global_step=global_step)
 
         # histograms of variables
-        for v in tf.global_variables():
-            histogram_summaries.append(tf.summary.histogram(v.name.replace(":", "_"), v))
+        # for v in tf.global_variables():
+            # histogram_summaries.append(
+            #     tf.summary.histogram(v.name.replace(":", "_"), v))
 
         # get the gradient updates -- these aren't histograms, but we'll
         # only update them when histograms are computed
-        histogram_summaries.extend(
-            summary_gradient_updates(grads, opt, lr))
+        # histogram_summaries.extend(
+        #     summary_gradient_updates(cont_grads, opt, lr))
+        # histogram_summaries.extend(
+        #     summary_gradient_updates(desc_grads, opt, lr))
 
         saver = tf.train.Saver(tf.global_variables(), max_to_keep=2)
-        summary_op = tf.summary.merge(
-            [perplexity_summmary] + norm_summaries
-        )
-        hist_summary_op = tf.summary.merge(histogram_summaries)
+        # summary_op = tf.summary.merge(
+        #     [perplexity_summmary] + list(norm_summaries.values())
+        # )
+        # hist_summary_op = tf.summary.merge(histogram_summaries)
 
-        init = tf.initialize_all_variables()
+        init = tf.global_variables_initializer()
 
     # do the training loop
-    bidirectional = options.get('bidirectional', False)
+    # bidirectional = options.get('bidirectional', False)
     with tf.Session(config=tf.ConfigProto(
             allow_soft_placement=True)) as sess:
         sess.run(init)
@@ -770,8 +988,8 @@ def train(options, data, n_gpus, tf_save_dir, tf_log_dir,
         if restart_ckpt_file is not None:
             loader = tf.train.Saver()
             loader.restore(sess, restart_ckpt_file)
-            
-        summary_writer = tf.summary.FileWriter(tf_log_dir, sess.graph)
+
+        # summary_writer = tf.summary.FileWriter(tf_log_dir, sess.graph)
 
         # For each batch:
         # Get a batch of data from the generator. The generator will
@@ -802,98 +1020,91 @@ def train(options, data, n_gpus, tf_save_dir, tf_log_dir,
         if char_inputs:
             max_chars = options['char_cnn']['max_characters_per_token']
 
-        if not char_inputs:
-            feed_dict = {
-                model.token_ids:
-                    np.zeros([batch_size, unroll_steps], dtype=np.int64)
-                for model in models
-            }
-        else:
-            feed_dict = {
-                model.tokens_characters:
-                    np.zeros([batch_size, unroll_steps, max_chars],
-                             dtype=np.int32)
-                for model in models
-            }
+        feed_dict = {
+            model.tokens_characters:
+                np.zeros([batch_size, unroll_steps, max_chars],
+                         dtype=np.int32)
+            for model in models
+        }
 
-        if bidirectional:
-            if not char_inputs:
-                feed_dict.update({
-                    model.token_ids_reverse:
-                        np.zeros([batch_size, unroll_steps], dtype=np.int64)
-                    for model in models
-                })
-            else:
-                feed_dict.update({
-                    model.tokens_characters_reverse:
-                        np.zeros([batch_size, unroll_steps, max_chars],
-                                 dtype=np.int32)
-                    for model in models
-                })
+        feed_dict.update({
+            model.tokens_characters_reverse:
+                np.zeros([batch_size, unroll_steps, max_chars],
+                         dtype=np.int32)
+            for model in models
+        })
 
         init_state_values = sess.run(init_state_tensors, feed_dict=feed_dict)
 
         t1 = time.time()
-        data_gen = data.iter_batches(batch_size * n_gpus, unroll_steps)
+        data_gen = data.iter_batches(batch_size * n_gpus)
         for batch_no, batch in enumerate(data_gen, start=1):
 
             # slice the input in the batch for the feed_dict
             X = batch
             feed_dict = {t: v for t, v in zip(
-                                        init_state_tensors, init_state_values)}
+                init_state_tensors, init_state_values)}
             for k in range(n_gpus):
                 model = models[k]
                 start = k * batch_size
                 end = (k + 1) * batch_size
 
-                feed_dict.update(
-                    _get_feed_dict_from_X(X, start, end, model,
-                                          char_inputs, bidirectional)
-                )
+                for field in ['desc', 'cont']:
+                    feed_dict.update(
+                        _get_feed_dict_from_X2(X, start, end, model, field)
+                    )
 
-            # This runs the train_op, summaries and the "final_state_tensors"
-            #   which just returns the tensors, passing in the initial
-            #   state tensors, token ids and next token ids
-            if batch_no % 1250 != 0:
-                ret = sess.run(
-                    [train_op, summary_op, train_perplexity] +
-                                                final_state_tensors,
-                    feed_dict=feed_dict
-                )
+                    # This runs the train_op, summaries and the "final_state_tensors"
+                    #   which just returns the tensors, passing in the initial
+                    #   state tensors, token ids and next token ids
+                    if batch_no % 1250 != 0:
+                        ret = sess.run(
+                            [train_op[field], train_perplexity] +
+                            final_state_tensors,
+                            feed_dict=feed_dict
+                        )
 
-                # first three entries of ret are:
-                #  train_op, summary_op, train_perplexity
-                # last entries are the final states -- set them to
-                # init_state_values
-                # for next batch
-                init_state_values = ret[3:]
+                        # first three entries of ret are:
+                        #  train_op, summary_op, train_perplexity
+                        # last entries are the final states -- set them to
+                        # init_state_values
+                        # for next batch
+                        init_state_values = ret[2:]
 
-            else:
-                # also run the histogram summaries
-                ret = sess.run(
-                    [train_op, summary_op, train_perplexity, hist_summary_op] + 
-                                                final_state_tensors,
-                    feed_dict=feed_dict
-                )
-                init_state_values = ret[4:]
-                
+                    else:
+                        # also run the histogram summaries
+                        ret = sess.run(
+                            [train_op[field], train_perplexity] +
+                            final_state_tensors,
+                            feed_dict=feed_dict
+                        )
+                        init_state_values = ret[2:]
 
-            if batch_no % 1250 == 0:
-                summary_writer.add_summary(ret[3], batch_no)
-            if batch_no % 100 == 0:
-                # write the summaries to tensorboard and display perplexity
-                summary_writer.add_summary(ret[1], batch_no)
-                print("Batch %s, train_perplexity=%s" % (batch_no, ret[2]))
-                print("Total time: %s" % (time.time() - t1))
+                    # if batch_no % 1250 == 0:
+                    #     summary_writer.add_summary(ret[3], batch_no)
+                    if batch_no % 100 == 0:
+                        # write the summaries to tensorboard and display perplexity
+                        # summary_writer.add_summary(ret[1], batch_no)
+                        print("Field %s, Batch %s, train_perplexity=%s" %
+                              (field, batch_no, ret[1]))
+                        if field == 'cont':
+                            print("Total time: {:.1f} (h)"
+                                  .format((time.time() - t1) / 3600))
 
-            if (batch_no % 1250 == 0) or (batch_no == n_batches_total):
+            if (batch_no % 10000 == 0) or (batch_no == n_batches_total):
                 # save the model
+                start_time = time.time()
                 checkpoint_path = os.path.join(tf_save_dir, 'model.ckpt')
                 saver.save(sess, checkpoint_path, global_step=global_step)
+                print("Model saved, time: {}".format(time.time() - start_time))
 
-            if batch_no == n_batches_total:
-                # done training!
-                break
+            # if batch_no == n_batches_total:
+            #     # done training!
+            #     break
+        print("Epoch finished")
+        checkpoint_path = os.path.join(tf_save_dir, 'model.ckpt')
+        saver.save(sess, checkpoint_path, global_step=global_step)
+        print("Model saved")
 
 
 def clip_by_global_norm_summary(t_list, clip_norm, norm_name, variables):
@@ -909,7 +1120,7 @@ def clip_by_global_norm_summary(t_list, clip_norm, norm_name, variables):
         name = 'norm_pre_clip/' + v.name.replace(":", "_")
         summary_ops.append(tf.summary.scalar(name, ns))
 
-    # clip 
+    # clip
     clipped_t_list, tf_norm = tf.clip_by_global_norm(t_list, clip_norm)
 
     # summary ops after clipping
@@ -983,25 +1194,25 @@ def test(options, ckpt_file, data, batch_size=256):
         final_state_tensors = model.final_lstm_state
         if not char_inputs:
             feed_dict = {
-                model.token_ids:
-                        np.zeros([batch_size, unroll_steps], dtype=np.int64)
+                model.token_ids: np.zeros(
+                    [batch_size, unroll_steps], dtype=np.int64)
             }
             if bidirectional:
                 feed_dict.update({
                     model.token_ids_reverse:
                         np.zeros([batch_size, unroll_steps], dtype=np.int64)
-                })  
+                })
         else:
             feed_dict = {
                 model.tokens_characters:
-                   np.zeros([batch_size, unroll_steps, max_chars],
-                                 dtype=np.int32)
+                    np.zeros([batch_size, unroll_steps, max_chars],
+                             dtype=np.int32)
             }
             if bidirectional:
                 feed_dict.update({
                     model.tokens_characters_reverse:
                         np.zeros([batch_size, unroll_steps, max_chars],
-                            dtype=np.int32)
+                                 dtype=np.int32)
                 })
 
         init_state_values = sess.run(
@@ -1012,16 +1223,16 @@ def test(options, ckpt_file, data, batch_size=256):
         batch_losses = []
         total_loss = 0.0
         for batch_no, batch in enumerate(
-                                data.iter_batches(batch_size, 1), start=1):
+                data.iter_batches(batch_size, 1), start=1):
             # slice the input in the batch for the feed_dict
             X = batch
 
-            feed_dict = {t: v for t, v in zip(
-                                        init_state_tensors, init_state_values)}
+            feed_dict = {t: v for t, v in
+                         zip(init_state_tensors, init_state_values)}
 
             feed_dict.update(
-                _get_feed_dict_from_X(X, 0, X['token_ids'].shape[0], model, 
-                                          char_inputs, bidirectional)
+                _get_feed_dict_from_X(X, 0, X['token_ids'].shape[0], model,
+                                      char_inputs, bidirectional)
             )
 
             ret = sess.run(
@@ -1036,7 +1247,8 @@ def test(options, ckpt_file, data, batch_size=256):
             avg_perplexity = np.exp(total_loss / batch_no)
 
             print("batch=%s, batch_perplexity=%s, avg_perplexity=%s, time=%s" %
-                (batch_no, batch_perplexity, avg_perplexity, time.time() - t1))
+                  (batch_no, batch_perplexity,
+                   avg_perplexity, time.time() - t1))
 
     avg_loss = np.mean(batch_losses)
     print("FINSIHED!  AVERAGE PERPLEXITY = %s" % np.exp(avg_loss))
@@ -1105,4 +1317,3 @@ def dump_weights(tf_save_dir, outfile):
                 dset = fout.create_dataset(outname, shape, dtype='float32')
                 values = sess.run([v])[0]
                 dset[...] = values
-
